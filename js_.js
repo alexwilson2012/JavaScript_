@@ -1,14 +1,23 @@
 (function(){
 
 	// Helpers (taken from lodash - https://github.com/lodash/lodash/blob/master/lodash.js)
-	function isFunction(value) {
-		return typeof value == 'function' || false;
-	}
+	var isFunction = function(value) {
+		return typeof value === 'function' || false;
+	};
 	// fallback for older versions of Chrome and Safari
 	if (isFunction(/x/)) {
 		isFunction = function(value) {
-			return typeof value == 'function' && toString.call(value) == '[object Function]';
+			return typeof value === 'function' && window.toString.call(value) === '[object Function]';
 		};
+	}
+	// Extend the object by adding all properties from the source to the destination
+	function extend (destination, source) {
+		for (var property in source) {
+			if (source.hasOwnProperty(property)) {
+				destination[property] = source[property];
+			}
+		}
+		return destination;
 	}
 
 
@@ -18,11 +27,12 @@
 
 	function createPublicMethod(func, methods) {
 		return function() {
-			var i, method;
+			var i, method, ret,
+				temp_store = {};
 
-			// Publics
+			// Publics (make sure the original function is set appropriately)
 			for (i = 0; (method = methods.p[i]); ++i) {
-				this['__'+method.n] = this[method.n];
+				temp_store['__'+method.n] = this[method.n];
 				this[method.n] = method.f;
 			}
 
@@ -31,34 +41,36 @@
 				this[method.n] = method.f;
 			}
 
-			func.apply(this, arguments);
+			ret = func.apply(this, arguments);
 
 			// Publics
 			for (i = 0; (method = methods.p[i]); ++i) {
-				this[method.n] = this['__'+method.n];
-				delete this['__'+method.n];
+				this[method.n] = temp_store['__'+method.n];
 			}
 
 			// Privates
 			for (i = 0; (method = methods._p[i]); ++i) {
 				delete this[method.n];
 			}
+
+			return ret;
 		};
 	}
 
 	var JSObj = function() {
 		var JS_ = this;
 
-		JS_.extend = function(object) {
+		JS_.extend = function(object, _data) {
+			_data = _data || {};
 			var properties = Object.keys(object),
-				methods = {
+				methods = extend({
 					p: [],
 					_p: []
-				},
-				variables = {
+				}, _data.methods),
+				variables = extend({
 					p: [],
 					_p: []
-				};
+				}, _data.variables);
 
 			// Sort methods / variables and public / private
 			for (var i = 0, name; (name = properties[i]) ; ++i) {
@@ -78,9 +90,17 @@
 			var Func = function(){},
 				FuncPrototype = Func.prototype;
 
-			for (var i = 0, method; (method = methods.p[i]); ++i) {
+			for (var j = 0, method; (method = methods.p[j]); ++j) {
 				FuncPrototype[method.n] = createPublicMethod(method.f, methods);
 			}
+
+			// Making inheritance possible
+			Func.extend = function(object){
+				return JS_.extend.call(this, object, {
+					methods: methods,
+					variables: variables
+				});
+			};
 
 			return Func;
 		};
@@ -88,6 +108,6 @@
 		return JS_;
 	};
 
-	window.JS_ = JSObj();
+	window.JS_ = new JSObj();
 
 })();
